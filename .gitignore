@@ -1,0 +1,13 @@
+.DS_Store
+.build/
+Assets/AppIcon.iconset/
+.swiftpm/
+DerivedData/
+Releases/
+*.app
+*.dmg
+*.zip
+*.log
+xcuserdata/
+.env
+.env.*

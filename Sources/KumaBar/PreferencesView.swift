@@ -99,7 +99,6 @@ struct PreferencesView: View {
                         try model.savePreferences(draft)
                         saveMessage = model.settings.launchAtLoginMessage ?? "Saved."
                         draft = model.settings.draft
-                        Task { await model.refresh() }
                     } catch {
                         saveMessage = error.localizedDescription
                     }

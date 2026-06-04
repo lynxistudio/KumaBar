@@ -1,6 +1,6 @@
 # KumaBar
 
-[![Download](https://img.shields.io/badge/Download-v1.3.0-blue?style=flat-square&logo=github)](https://github.com/lynxistudio/KumaBar/releases/latest)
+[![Download](https://img.shields.io/badge/Download-v1.3.1-blue?style=flat-square&logo=github)](https://github.com/lynxistudio/KumaBar/releases/latest)
 [![Platform](https://img.shields.io/badge/macOS-14.0%2B-lightgrey?style=flat-square&logo=apple)](https://github.com/lynxistudio/KumaBar)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 [![Swift](https://img.shields.io/badge/Swift-6.0-orange?style=flat-square&logo=swift)](https://swift.org)
@@ -33,6 +33,7 @@ with status dots, search, and detail popover.*
 - **Menu bar monitor list** — failed monitors first with red badge count
 - **Search-as-you-type** — filter monitors instantly by name
 - **Adjustable refresh** — 30, 60, 120, or 300 second intervals
+- **Wake recovery** — reconnect automatically after sleep and show stale-data warnings
 - **Smart notifications** — UP→DOWN and DOWN→UP alerts, no repeated outage spam
 - **Detail popover** — status, response time, check time, SSL expiry, clickable target
 - **Add websites** — create HTTP monitors from inside the menu bar popover

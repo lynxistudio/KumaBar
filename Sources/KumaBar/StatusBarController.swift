@@ -42,11 +42,12 @@ final class StatusBarController: NSObject {
         popover.performClose(nil)
     }
 
-    private func updateIcon() {
+    func updateIcon() {
         guard let button = statusItem.button else { return }
         let image = MenuBarIconRenderer.image(
             status: model.menuBarStatus,
-            downCount: model.downCount
+            downCount: model.downCount,
+            appearance: button.effectiveAppearance
         )
         button.image = image
         button.toolTip = image.accessibilityDescription
@@ -58,6 +59,9 @@ final class StatusBarController: NSObject {
         if popover.isShown {
             closeMenu()
         } else {
+            if model.isDataStale {
+                model.refreshNow(reason: "menu opened with stale data")
+            }
             popover.show(
                 relativeTo: button.bounds,
                 of: button,

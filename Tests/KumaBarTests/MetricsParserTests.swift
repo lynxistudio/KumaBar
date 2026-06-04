@@ -40,6 +40,29 @@ struct MetricsParserTests {
     }
 
     @Test
+    func testProblemStatesAreClassifiedConsistently() {
+        #expect(MonitorState.down.isProblem)
+        #expect(MonitorState.unknown.isProblem)
+        #expect(MonitorState.up.isProblem == false)
+        #expect(MonitorState.pending.isProblem == false)
+        #expect(MonitorState.maintenance.isProblem == false)
+        #expect(MonitorState.unknown.colorName == "red")
+    }
+
+    @Test
+    func testUnexpectedMetricStatusIsTreatedAsProblem() {
+        let metrics = """
+        monitor_status{monitor_name="Mystery",monitor_type="http",monitor_id="9"} 9
+        """
+
+        let monitors = MetricsParser.parse(metrics, fetchedAt: Date())
+
+        #expect(monitors.count == 1)
+        #expect(monitors[0].state == .unknown)
+        #expect(monitors[0].state.isProblem)
+    }
+
+    @Test
     func testMetricsEndpointDoesNotGainTextExtension() throws {
         let baseURL = try #require(URL(string: "http://127.0.0.1:3001"))
 
@@ -93,6 +116,32 @@ struct MetricsParserTests {
     }
 
     @Test
+    func testMenuBarLogoFollowsLightAndDarkAppearances() throws {
+        let lightAppearance = try #require(NSAppearance(named: .aqua))
+        let darkAppearance = try #require(NSAppearance(named: .darkAqua))
+        let lightBitmap = try #require(bitmap(
+            for: MenuBarIconRenderer.image(
+                status: .healthy,
+                downCount: 0,
+                appearance: lightAppearance
+            )
+        ))
+        let darkBitmap = try #require(bitmap(
+            for: MenuBarIconRenderer.image(
+                status: .healthy,
+                downCount: 0,
+                appearance: darkAppearance
+            )
+        ))
+
+        let lightLogoLuminance = try #require(averageLuminance(in: lightBitmap, xRange: 0..<16))
+        let darkLogoLuminance = try #require(averageLuminance(in: darkBitmap, xRange: 0..<16))
+
+        #expect(lightLogoLuminance < 0.35)
+        #expect(darkLogoLuminance > 0.65)
+    }
+
+    @Test
     @MainActor
     func testClosingLastWindowDoesNotTerminateMenuBarApp() {
         #expect(AppDelegate.terminatesAfterLastWindowClosed == false)
@@ -115,6 +164,66 @@ struct MetricsParserTests {
         #expect(try settings.managementToken() == "local-token")
     }
 
+    @Test
+    func testMonitorDataBecomesStaleAfterThreeRefreshIntervals() {
+        let now = Date(timeIntervalSince1970: 1_000)
+
+        #expect(AppModel.dataIsStale(
+            lastRefreshTime: now.addingTimeInterval(-89),
+            refreshInterval: .thirtySeconds,
+            now: now
+        ) == false)
+        #expect(AppModel.dataIsStale(
+            lastRefreshTime: now.addingTimeInterval(-91),
+            refreshInterval: .thirtySeconds,
+            now: now
+        ) == true)
+        #expect(AppModel.dataIsStale(
+            lastRefreshTime: now.addingTimeInterval(-899),
+            refreshInterval: .fiveMinutes,
+            now: now
+        ) == false)
+        #expect(AppModel.dataIsStale(
+            lastRefreshTime: now.addingTimeInterval(-901),
+            refreshInterval: .fiveMinutes,
+            now: now
+        ) == true)
+    }
+
+    @Test
+    @MainActor
+    func testManualRefreshRestartsTheFetchLoop() async throws {
+        let suiteName = "KumaBarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        defaults.set("http://127.0.0.1:3001", forKey: "baseURL")
+        defaults.set(AuthenticationMode.apiKey.rawValue, forKey: "authenticationMode")
+        defaults.set("local-api-key", forKey: "apiKey")
+        defaults.set(RefreshInterval.fiveMinutes.rawValue, forKey: "refreshInterval")
+        defaults.set(false, forKey: "notificationsEnabled")
+
+        let counter = FetchCounter()
+        let model = AppModel(
+            provider: CountingMonitorProvider(counter: counter),
+            settings: SettingsStore(defaults: defaults)
+        )
+        try await waitForFetchCount(1, counter: counter)
+        let initialCount = await counter.value
+
+        model.refreshNow(reason: "test")
+
+        try await waitForFetchCount(initialCount + 1, counter: counter)
+        #expect(await counter.value > initialCount)
+    }
+
+    private func waitForFetchCount(_ expected: Int, counter: FetchCounter) async throws {
+        for _ in 0..<20 {
+            if await counter.value >= expected { return }
+            try await Task.sleep(for: .milliseconds(25))
+        }
+        Issue.record("Timed out waiting for fetch count \(expected)")
+    }
+
     private func bitmap(for image: NSImage) -> NSBitmapImageRep? {
         guard let data = image.tiffRepresentation else { return nil }
         return NSBitmapImageRep(data: data)
@@ -135,5 +244,51 @@ struct MetricsParserTests {
             }
         }
         return false
+    }
+
+    private func averageLuminance(in bitmap: NSBitmapImageRep, xRange: Range<Int>) -> Double? {
+        var total = 0.0
+        var count = 0
+        for x in xRange where x < bitmap.pixelsWide {
+            for y in 0..<bitmap.pixelsHigh {
+                guard let color = bitmap.colorAt(x: x, y: y)?.usingColorSpace(.deviceRGB),
+                      color.alphaComponent > 0.3 else {
+                    continue
+                }
+                total += color.redComponent * 0.2126
+                    + color.greenComponent * 0.7152
+                    + color.blueComponent * 0.0722
+                count += 1
+            }
+        }
+        return count > 0 ? total / Double(count) : nil
+    }
+}
+
+private actor FetchCounter {
+    private(set) var value = 0
+
+    func increment() {
+        value += 1
+    }
+}
+
+private struct CountingMonitorProvider: MonitorProviding {
+    let counter: FetchCounter
+
+    func fetchMonitors(credentials: KumaCredentials) async throws -> [MonitorSnapshot] {
+        await counter.increment()
+        return [
+            MonitorSnapshot(
+                id: "test",
+                name: "Test Monitor",
+                type: "http",
+                target: "https://example.com",
+                state: .up,
+                responseTimeMilliseconds: 12,
+                sslDaysRemaining: nil,
+                lastCheckTime: Date()
+            )
+        ]
     }
 }

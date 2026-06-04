@@ -23,7 +23,16 @@ enum MonitorState: Int, Codable, Sendable {
         case .down: "red"
         case .pending: "orange"
         case .maintenance: "blue"
-        case .unknown: "gray"
+        case .unknown: "red"
+        }
+    }
+
+    var isProblem: Bool {
+        switch self {
+        case .down, .unknown:
+            true
+        case .up, .pending, .maintenance:
+            false
         }
     }
 }

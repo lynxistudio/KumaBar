@@ -21,19 +21,16 @@ struct KumaMetricsClient: MonitorProviding {
         }
     }
 
-    private let session: URLSession
-
-    init(session: URLSession = KumaMetricsClient.makeSession()) {
-        self.session = session
-    }
-
     func fetchMonitors(credentials: KumaCredentials) async throws -> [MonitorSnapshot] {
+        let session = Self.makeSession()
+        defer { session.invalidateAndCancel() }
         let metricsURL = Self.metricsURL(for: credentials.baseURL)
         var request = URLRequest(url: metricsURL)
         request.httpMethod = "GET"
         request.cachePolicy = .reloadIgnoringLocalAndRemoteCacheData
         request.timeoutInterval = 15
         request.setValue(credentials.authorizationValue, forHTTPHeaderField: "Authorization")
+        request.setValue("close", forHTTPHeaderField: "Connection")
 
         let (data, response) = try await session.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {

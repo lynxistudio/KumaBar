@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.1
+
+- Reconnects monitor refreshes after macOS wake.
+- Rebuilds the refresh loop when the user presses refresh.
+- Uses a fresh network session for every metrics request.
+- Shows the last successful refresh time and marks stale data as unavailable.
+- Explicitly synchronizes the native status item after refresh success or failure.
+
 ## 1.3.0
 
 - Replaced SwiftUI `MenuBarExtra` with a persistent native AppKit status item.

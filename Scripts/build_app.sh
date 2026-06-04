@@ -4,7 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
-SCRATCH="${KUMABAR_SWIFT_SCRATCH_PATH:-$ROOT/.build/swiftpm}"
+DEFAULT_SCRATCH="${TMPDIR:-/tmp}/KumaBar-swiftpm"
+SCRATCH="${KUMABAR_SWIFT_SCRATCH_PATH:-$DEFAULT_SCRATCH}"
 swift build --disable-sandbox --scratch-path "$SCRATCH" -c release
 
 APP="$ROOT/.build/KumaBar.app"

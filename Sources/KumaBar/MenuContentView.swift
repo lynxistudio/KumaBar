@@ -91,9 +91,15 @@ struct MenuContentView: View {
                     .padding(.horizontal, 8)
                     .padding(.vertical, 4)
             }
+            Text(lastUpdatedText)
+                .font(.system(size: 9))
+                .foregroundStyle(model.isDataStale ? .orange : .secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 2)
             HStack(spacing: 12) {
                 Button {
-                    Task { await model.refresh() }
+                    model.refreshNow(reason: "manual")
                 } label: {
                     Image(systemName: "arrow.clockwise")
                         .rotationEffect(.degrees(model.isRefreshing ? 360 : 0))
@@ -150,6 +156,14 @@ struct MenuContentView: View {
             .frame(height: 30)
         }
     }
+
+    private var lastUpdatedText: String {
+        guard let lastRefreshTime = model.lastRefreshTime else {
+            return "Waiting for first update"
+        }
+        let formatted = lastRefreshTime.formatted(date: .omitted, time: .standard)
+        return model.isDataStale ? "Data is stale - last updated \(formatted)" : "Updated \(formatted)"
+    }
 }
 
 private struct MonitorRow: View {
@@ -179,7 +193,7 @@ private struct MonitorRow: View {
     }
 
     private var trailingText: String {
-        if monitor.state == .down {
+        if monitor.state.isProblem {
             return monitor.detailText
         }
         if let ping = monitor.responseTimeMilliseconds {
@@ -191,10 +205,9 @@ private struct MonitorRow: View {
     private var statusColor: Color {
         switch monitor.state {
         case .up: .green
-        case .down: .red
+        case .down, .unknown: .red
         case .pending: .orange
         case .maintenance: .blue
-        case .unknown: .gray
         }
     }
 }

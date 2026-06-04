@@ -10,20 +10,25 @@ final class AppModel: ObservableObject {
     @Published var errorMessage: String?
     @Published var searchText = ""
 
-    let settings = SettingsStore()
+    let settings: SettingsStore
 
     private let provider: any MonitorProviding
     private let managementClient = KumaManagementClient()
     private let notifications = NotificationController()
     private let auxiliaryWindows = AuxiliaryWindowController()
     private var refreshTask: Task<Void, Never>?
+    private var refreshGeneration = 0
     weak var statusBarController: StatusBarController?
 
-    init(provider: any MonitorProviding = KumaMetricsClient()) {
+    init(
+        provider: any MonitorProviding = KumaMetricsClient(),
+        settings: SettingsStore = SettingsStore()
+    ) {
         self.provider = provider
+        self.settings = settings
         RuntimeLog.write("app model initialized")
         notifications.requestAuthorizationIfNeeded(enabled: settings.notificationsEnabled)
-        restartRefreshLoop()
+        restartRefreshLoop(reason: "launch")
     }
 
     deinit {
@@ -34,11 +39,22 @@ final class AppModel: ObservableObject {
         guard !monitors.isEmpty else {
             return errorMessage == nil ? .loading : .unavailable
         }
+        guard errorMessage == nil, !isDataStale else {
+            return .unavailable
+        }
         return downCount > 0 ? .down : .healthy
     }
 
+    var isDataStale: Bool {
+        guard let lastRefreshTime else { return false }
+        return Self.dataIsStale(
+            lastRefreshTime: lastRefreshTime,
+            refreshInterval: settings.refreshInterval
+        )
+    }
+
     var downCount: Int {
-        monitors.filter { $0.state == .down }.count
+        monitors.filter { $0.state.isProblem }.count
     }
 
     var filteredMonitors: [MonitorSnapshot] {
@@ -52,7 +68,7 @@ final class AppModel: ObservableObject {
     }
 
     var failedMonitors: [MonitorSnapshot] {
-        filteredMonitors.filter { $0.state == .down }
+        filteredMonitors.filter { $0.state.isProblem }
     }
 
     var healthyMonitors: [MonitorSnapshot] {
@@ -60,29 +76,51 @@ final class AppModel: ObservableObject {
     }
 
     var otherMonitors: [MonitorSnapshot] {
-        filteredMonitors.filter { $0.state != .up && $0.state != .down }
+        filteredMonitors.filter { $0.state != .up && !$0.state.isProblem }
     }
 
     func savePreferences(_ draft: PreferencesDraft) throws {
         try settings.save(draft)
         notifications.requestAuthorizationIfNeeded(enabled: settings.notificationsEnabled)
-        restartRefreshLoop()
+        restartRefreshLoop(reason: "settings saved")
     }
 
-    func refresh() async {
-        guard !isRefreshing else { return }
+    func refreshNow(reason: String = "manual") {
+        restartRefreshLoop(reason: reason)
+    }
+
+    private func fetchAndApply(reason: String, generation: Int) async {
+        guard generation == refreshGeneration, !isRefreshing else { return }
+        RuntimeLog.write("refresh started: \(reason)")
+        isRefreshing = true
+        defer {
+            if generation == refreshGeneration {
+                isRefreshing = false
+            }
+        }
+
         do {
             let credentials = try settings.credentials()
-            isRefreshing = true
-            defer { isRefreshing = false }
             let latest = try await provider.fetchMonitors(credentials: credentials)
+            guard !Task.isCancelled, generation == refreshGeneration else {
+                RuntimeLog.write("refresh discarded after cancellation: \(reason)")
+                return
+            }
             monitors = latest
             lastRefreshTime = Date()
             errorMessage = nil
             notifications.process(latest, enabled: settings.notificationsEnabled)
+            statusBarController?.updateIcon()
+            RuntimeLog.write(
+                "refresh succeeded: monitors=\(latest.count) down=\(latest.filter { $0.state.isProblem }.count)"
+            )
+        } catch is CancellationError {
+            RuntimeLog.write("refresh cancelled: \(reason)")
         } catch {
-            isRefreshing = false
+            guard generation == refreshGeneration else { return }
             errorMessage = error.localizedDescription
+            statusBarController?.updateIcon()
+            RuntimeLog.write("refresh failed: \(error.localizedDescription)")
         }
     }
 
@@ -122,7 +160,8 @@ final class AppModel: ObservableObject {
             managementToken: token,
             draft: draft
         )
-        RuntimeLog.write("add website completed; waiting for scheduled refresh")
+        RuntimeLog.write("add website completed")
+        refreshNow(reason: "website added")
     }
 
     func saveManagementLogin(username: String, password: String) async throws {
@@ -141,18 +180,31 @@ final class AppModel: ObservableObject {
         try settings.saveManagementToken(token)
     }
 
-    func restartRefreshLoop() {
+    func restartRefreshLoop(reason: String) {
+        refreshGeneration += 1
+        let generation = refreshGeneration
         refreshTask?.cancel()
+        isRefreshing = false
+        RuntimeLog.write("refresh loop restarted: \(reason)")
         refreshTask = Task { [weak self] in
             guard let self else { return }
-            await self.refresh()
+            await self.fetchAndApply(reason: reason, generation: generation)
             while !Task.isCancelled {
                 let duration = UInt64(self.settings.refreshInterval.rawValue) * 1_000_000_000
                 try? await Task.sleep(nanoseconds: duration)
                 guard !Task.isCancelled else { return }
-                await self.refresh()
+                await self.fetchAndApply(reason: "scheduled", generation: generation)
             }
         }
+    }
+
+    nonisolated static func dataIsStale(
+        lastRefreshTime: Date,
+        refreshInterval: RefreshInterval,
+        now: Date = Date()
+    ) -> Bool {
+        let staleAfter = max(TimeInterval(refreshInterval.rawValue * 3), 90)
+        return now.timeIntervalSince(lastRefreshTime) > staleAfter
     }
 }
 

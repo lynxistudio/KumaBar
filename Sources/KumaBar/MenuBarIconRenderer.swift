@@ -1,12 +1,13 @@
 import AppKit
 
 enum MenuBarIconRenderer {
-    static func image(status: MenuBarStatus, downCount: Int) -> NSImage {
+    static func image(status: MenuBarStatus, downCount: Int, appearance: NSAppearance? = nil) -> NSImage {
         let width: CGFloat = status == .down ? 30 : 23
         let size = NSSize(width: width, height: 18)
         let image = NSImage(size: size, flipped: false) { _ in
-            drawLogo()
-            drawStatus(status: status, downCount: downCount)
+            let foregroundColor = menuBarForegroundColor(for: appearance)
+            drawLogo(color: foregroundColor)
+            drawStatus(status: status, downCount: downCount, foregroundColor: foregroundColor)
             return true
         }
         image.isTemplate = false
@@ -14,42 +15,70 @@ enum MenuBarIconRenderer {
         return image
     }
 
-    private static func drawLogo() {
-        let configuration = NSImage.SymbolConfiguration(pointSize: 13, weight: .semibold)
-        let logo = NSImage(systemSymbolName: "waveform.path.ecg", accessibilityDescription: nil)?
-            .withSymbolConfiguration(configuration)
-        logo?.draw(
-            in: NSRect(x: 0, y: 2, width: 15, height: 14),
-            from: .zero,
-            operation: .sourceOver,
-            fraction: 1
-        )
+    private static func drawLogo(color: NSColor) {
+        let path = NSBezierPath()
+        path.lineWidth = 1.55
+        path.lineCapStyle = .round
+        path.lineJoinStyle = .round
+        path.move(to: NSPoint(x: 1.0, y: 8.7))
+        path.line(to: NSPoint(x: 4.7, y: 8.7))
+        path.line(to: NSPoint(x: 6.2, y: 4.0))
+        path.line(to: NSPoint(x: 8.6, y: 14.2))
+        path.line(to: NSPoint(x: 10.6, y: 8.7))
+        path.line(to: NSPoint(x: 15.0, y: 8.7))
+        color.setStroke()
+        path.stroke()
     }
 
-    private static func drawStatus(status: MenuBarStatus, downCount: Int) {
+    private static func drawStatus(status: MenuBarStatus, downCount: Int, foregroundColor: NSColor) {
         switch status {
         case .down:
             let value = "\(downCount)" as NSString
             let attributes: [NSAttributedString.Key: Any] = [
                 .font: NSFont.monospacedDigitSystemFont(ofSize: 9, weight: .bold),
-                .foregroundColor: NSColor.labelColor
+                .foregroundColor: foregroundColor
             ]
             let valueSize = value.size(withAttributes: attributes)
             value.draw(
                 at: NSPoint(x: 19 - valueSize.width / 2, y: 8),
                 withAttributes: attributes
             )
-            drawDot(color: .systemRed, center: NSPoint(x: 19, y: 4), diameter: 5)
+            drawDot(
+                color: .systemRed,
+                outlineColor: foregroundColor,
+                center: NSPoint(x: 19, y: 4),
+                diameter: 5
+            )
         case .healthy:
-            drawDot(color: .systemGreen, center: NSPoint(x: 19, y: 9), diameter: 7)
+            drawDot(
+                color: .systemGreen,
+                outlineColor: foregroundColor,
+                center: NSPoint(x: 19, y: 9),
+                diameter: 7
+            )
         case .loading:
-            drawDot(color: .systemGray, center: NSPoint(x: 19, y: 9), diameter: 7)
+            drawDot(
+                color: .systemGray,
+                outlineColor: foregroundColor,
+                center: NSPoint(x: 19, y: 9),
+                diameter: 7
+            )
         case .unavailable:
-            drawDot(color: .systemOrange, center: NSPoint(x: 19, y: 9), diameter: 7)
+            drawDot(
+                color: .systemOrange,
+                outlineColor: foregroundColor,
+                center: NSPoint(x: 19, y: 9),
+                diameter: 7
+            )
         }
     }
 
-    private static func drawDot(color: NSColor, center: NSPoint, diameter: CGFloat) {
+    private static func drawDot(
+        color: NSColor,
+        outlineColor: NSColor,
+        center: NSPoint,
+        diameter: CGFloat
+    ) {
         let rect = NSRect(
             x: center.x - diameter / 2,
             y: center.y - diameter / 2,
@@ -58,10 +87,27 @@ enum MenuBarIconRenderer {
         )
         color.setFill()
         NSBezierPath(ovalIn: rect).fill()
-        NSColor.labelColor.withAlphaComponent(0.55).setStroke()
+        outlineColor.withAlphaComponent(0.55).setStroke()
         let outline = NSBezierPath(ovalIn: rect)
         outline.lineWidth = 0.5
         outline.stroke()
+    }
+
+    private static func menuBarForegroundColor(for appearance: NSAppearance?) -> NSColor {
+        let matches = appearance?.bestMatch(from: [
+            .darkAqua,
+            .aqua,
+            .vibrantDark,
+            .vibrantLight,
+            .accessibilityHighContrastDarkAqua,
+            .accessibilityHighContrastAqua
+        ])
+        switch matches {
+        case .darkAqua, .vibrantDark, .accessibilityHighContrastDarkAqua:
+            return .white
+        default:
+            return .black
+        }
     }
 
     private static func accessibilityDescription(status: MenuBarStatus, downCount: Int) -> String {

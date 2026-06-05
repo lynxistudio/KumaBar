@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.2
+
+- Fixes problem rows so failed monitors always show a red indicator in the dropdown.
+- Removes sticky section headers to avoid confusing healthy rows with the Problems section while scrolling.
+- Adds per-monitor management URLs in the detail popover with a clickable management link.
+
 ## 1.3.1
 
 - Reconnects monitor refreshes after macOS wake.

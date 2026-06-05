@@ -17,6 +17,7 @@ struct MenuContentView: View {
         .frame(width: 360, height: 500)
         .popover(item: $selectedMonitor, arrowEdge: .trailing) { monitor in
             MonitorDetailView(monitor: monitor)
+                .environmentObject(model)
         }
     }
 
@@ -42,27 +43,31 @@ struct MenuContentView: View {
 
     private var monitorList: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 0, pinnedViews: [.sectionHeaders]) {
+            LazyVStack(alignment: .leading, spacing: 0) {
                 if model.filteredMonitors.isEmpty {
                     Text(model.errorMessage ?? "No monitors found")
                         .font(.system(size: 12))
                         .foregroundStyle(.secondary)
                         .padding(10)
                 } else {
-                    monitorSection("Problems", monitors: model.failedMonitors)
-                    monitorSection("Other", monitors: model.otherMonitors)
-                    monitorSection("Healthy", monitors: model.healthyMonitors)
+                    monitorSection("Problems", monitors: model.failedMonitors, kind: .problems)
+                    monitorSection("Other", monitors: model.otherMonitors, kind: .other)
+                    monitorSection("Healthy", monitors: model.healthyMonitors, kind: .healthy)
                 }
             }
         }
     }
 
     @ViewBuilder
-    private func monitorSection(_ title: String, monitors: [MonitorSnapshot]) -> some View {
+    private func monitorSection(
+        _ title: String,
+        monitors: [MonitorSnapshot],
+        kind: MonitorSectionKind
+    ) -> some View {
         if !monitors.isEmpty {
             Section {
                 ForEach(monitors) { monitor in
-                    MonitorRow(monitor: monitor) {
+                    MonitorRow(monitor: monitor, sectionKind: kind) {
                         selectedMonitor = monitor
                     }
                 }
@@ -166,8 +171,15 @@ struct MenuContentView: View {
     }
 }
 
+private enum MonitorSectionKind {
+    case problems
+    case other
+    case healthy
+}
+
 private struct MonitorRow: View {
     let monitor: MonitorSnapshot
+    let sectionKind: MonitorSectionKind
     let action: () -> Void
 
     var body: some View {
@@ -193,8 +205,8 @@ private struct MonitorRow: View {
     }
 
     private var trailingText: String {
-        if monitor.state.isProblem {
-            return monitor.detailText
+        if isDisplayedAsProblem {
+            return monitor.state.isProblem ? monitor.detailText : "Problem"
         }
         if let ping = monitor.responseTimeMilliseconds {
             return "\(Int(ping.rounded())) ms"
@@ -203,11 +215,22 @@ private struct MonitorRow: View {
     }
 
     private var statusColor: Color {
-        switch monitor.state {
-        case .up: .green
-        case .down, .unknown: .red
-        case .pending: .orange
-        case .maintenance: .blue
+        if isDisplayedAsProblem {
+            return .red
         }
+        switch monitor.state {
+        case .up:
+            return .green
+        case .down, .unknown:
+            return .red
+        case .pending:
+            return .orange
+        case .maintenance:
+            return .blue
+        }
+    }
+
+    private var isDisplayedAsProblem: Bool {
+        sectionKind == .problems || monitor.state.isProblem
     }
 }

@@ -1,6 +1,6 @@
 # KumaBar
 
-[![Download](https://img.shields.io/badge/Download-v1.3.1-blue?style=flat-square&logo=github)](https://github.com/lynxistudio/KumaBar/releases/latest)
+[![Download](https://img.shields.io/badge/Download-v1.3.2-blue?style=flat-square&logo=github)](https://github.com/lynxistudio/KumaBar/releases/latest)
 [![Platform](https://img.shields.io/badge/macOS-14.0%2B-lightgrey?style=flat-square&logo=apple)](https://github.com/lynxistudio/KumaBar)
 [![License](https://img.shields.io/badge/License-MIT-green?style=flat-square)](LICENSE)
 [![Swift](https://img.shields.io/badge/Swift-6.0-orange?style=flat-square&logo=swift)](https://swift.org)

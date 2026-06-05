@@ -5,12 +5,14 @@ import ServiceManagement
 final class SettingsStore: ObservableObject {
     enum SettingsError: LocalizedError {
         case invalidURL
+        case invalidManagementURL
         case missingAPIKey
         case missingUsernameOrPassword
 
         var errorDescription: String? {
             switch self {
             case .invalidURL: "Enter a valid Uptime Kuma URL, including http:// or https://."
+            case .invalidManagementURL: "Enter a valid management URL, including http:// or https://."
             case .missingAPIKey: "Enter an API key."
             case .missingUsernameOrPassword: "Enter both a username and password."
             }
@@ -21,6 +23,7 @@ final class SettingsStore: ObservableObject {
     @Published private(set) var launchAtLoginMessage: String?
 
     private let defaults: UserDefaults
+    private let managementURLsKey = "monitorManagementURLs"
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
@@ -130,6 +133,32 @@ final class SettingsStore: ObservableObject {
 
     func saveManagementToken(_ token: String) throws {
         defaults.set(token, forKey: "managementToken")
+    }
+
+    func managementURL(for monitor: MonitorSnapshot) -> String? {
+        managementURLs()[monitor.id]
+    }
+
+    func saveManagementURL(_ rawValue: String, for monitor: MonitorSnapshot) throws {
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        var urls = managementURLs()
+        guard !trimmed.isEmpty else {
+            urls.removeValue(forKey: monitor.id)
+            defaults.set(urls, forKey: managementURLsKey)
+            return
+        }
+        guard let url = URL(string: trimmed),
+              let scheme = url.scheme?.lowercased(),
+              ["http", "https"].contains(scheme),
+              url.host != nil else {
+            throw SettingsError.invalidManagementURL
+        }
+        urls[monitor.id] = trimmed
+        defaults.set(urls, forKey: managementURLsKey)
+    }
+
+    private func managementURLs() -> [String: String] {
+        defaults.dictionary(forKey: managementURLsKey) as? [String: String] ?? [:]
     }
 
     private func applyLaunchAtLogin(_ enabled: Bool) -> Bool {

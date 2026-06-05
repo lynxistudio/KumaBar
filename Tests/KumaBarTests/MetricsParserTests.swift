@@ -165,6 +165,33 @@ struct MetricsParserTests {
     }
 
     @Test
+    @MainActor
+    func testManagementURLCanBeSavedAndClearedPerMonitor() throws {
+        let suiteName = "KumaBarTests.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suiteName)!
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+        let settings = SettingsStore(defaults: defaults)
+        let monitor = MonitorSnapshot(
+            id: "monitor-1",
+            name: "Example",
+            type: "http",
+            target: "https://example.com",
+            state: .up,
+            responseTimeMilliseconds: 42,
+            sslDaysRemaining: nil,
+            lastCheckTime: Date()
+        )
+
+        try settings.saveManagementURL(" https://admin.example.com ", for: monitor)
+
+        #expect(settings.managementURL(for: monitor) == "https://admin.example.com")
+
+        try settings.saveManagementURL("", for: monitor)
+
+        #expect(settings.managementURL(for: monitor) == nil)
+    }
+
+    @Test
     func testMonitorDataBecomesStaleAfterThreeRefreshIntervals() {
         let now = Date(timeIntervalSince1970: 1_000)
 

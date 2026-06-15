@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.3
+
+- Removes the repeating SwiftUI refresh animation that could keep the menu popover rendering continuously.
+- Reduces redundant native status item image rendering when model values change but menu bar status is unchanged.
+
 ## 1.3.2
 
 - Fixes problem rows so failed monitors always show a red indicator in the dropdown.

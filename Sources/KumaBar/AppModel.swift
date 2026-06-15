@@ -208,7 +208,7 @@ final class AppModel: ObservableObject {
     }
 }
 
-enum MenuBarStatus {
+enum MenuBarStatus: Equatable {
     case loading
     case healthy
     case down

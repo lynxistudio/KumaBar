@@ -106,14 +106,7 @@ struct MenuContentView: View {
                 Button {
                     model.refreshNow(reason: "manual")
                 } label: {
-                    Image(systemName: "arrow.clockwise")
-                        .rotationEffect(.degrees(model.isRefreshing ? 360 : 0))
-                        .animation(
-                            model.isRefreshing
-                                ? .linear(duration: 0.8).repeatForever(autoreverses: false)
-                                : .default,
-                            value: model.isRefreshing
-                        )
+                    Image(systemName: model.isRefreshing ? "arrow.triangle.2.circlepath" : "arrow.clockwise")
                 }
                 .buttonStyle(.plain)
                 .help("Refresh")

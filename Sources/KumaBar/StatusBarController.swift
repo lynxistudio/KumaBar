@@ -1,5 +1,4 @@
 import AppKit
-import Combine
 import SwiftUI
 
 @MainActor
@@ -7,7 +6,7 @@ final class StatusBarController: NSObject {
     private let model: AppModel
     private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     private let popover = NSPopover()
-    private var cancellables: Set<AnyCancellable> = []
+    private var lastIconKey: IconKey?
 
     init(model: AppModel) {
         self.model = model
@@ -25,16 +24,7 @@ final class StatusBarController: NSObject {
             button.imagePosition = .imageOnly
         }
 
-        model.objectWillChange
-            .receive(on: RunLoop.main)
-            .sink { [weak self] _ in
-                DispatchQueue.main.async {
-                    self?.updateIcon()
-                }
-            }
-            .store(in: &cancellables)
-
-        updateIcon()
+        updateIcon(force: true)
         RuntimeLog.write("native status item initialized")
     }
 
@@ -42,11 +32,25 @@ final class StatusBarController: NSObject {
         popover.performClose(nil)
     }
 
-    func updateIcon() {
+    func updateIcon(force: Bool = false) {
         guard let button = statusItem.button else { return }
-        let image = MenuBarIconRenderer.image(
+        let iconKey = IconKey(
             status: model.menuBarStatus,
             downCount: model.downCount,
+            appearanceName: button.effectiveAppearance.bestMatch(from: [
+                .darkAqua,
+                .aqua,
+                .vibrantDark,
+                .vibrantLight,
+                .accessibilityHighContrastDarkAqua,
+                .accessibilityHighContrastAqua
+            ])
+        )
+        guard force || iconKey != lastIconKey else { return }
+        lastIconKey = iconKey
+        let image = MenuBarIconRenderer.image(
+            status: iconKey.status,
+            downCount: iconKey.downCount,
             appearance: button.effectiveAppearance
         )
         button.image = image
@@ -69,4 +73,10 @@ final class StatusBarController: NSObject {
             )
         }
     }
+}
+
+private struct IconKey: Equatable {
+    let status: MenuBarStatus
+    let downCount: Int
+    let appearanceName: NSAppearance.Name?
 }
